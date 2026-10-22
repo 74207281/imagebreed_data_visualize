@@ -54,6 +54,33 @@ Or directly via the virtual environment:
 
 ---
 
+## 🐳 Quick Start (Using Docker)
+
+### Option A: Using Docker CLI
+```bash
+# 1. Build the Docker image
+docker build -t agriplot-vision .
+
+# 2. Run the container
+docker run -d -p 8000:8000 --name agriplot-app agriplot-vision
+```
+
+### Option B: Using Docker Compose
+```bash
+docker compose up -d --build
+```
+
+Access the dashboard at [http://localhost:8000](http://localhost:8000) or [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+To stop the container:
+```bash
+docker stop agriplot-app && docker rm agriplot-app
+# Or if using docker compose:
+docker compose down
+```
+
+---
+
 ## 📊 Key Features
 
 ### 1. 🗺️ Field Spatial Heatmap

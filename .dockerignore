@@ -1,0 +1,32 @@
+# Python byte code and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Git
+.git/
+.gitignore
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker files
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
