@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgriPlot Vision - Multispectral & Vegetation Index Phenotyping</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- Google Fonts & Lucide Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .tab-btn.active {
+      background-color: #059669;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+    .tab-btn:not(.active):hover {
+      background-color: #1e293b;
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-x-hidden antialiased bg-slate-950 text-slate-100">
+
+  <!-- TOP APP BAR -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-900/30">
+          <i data-lucide="sprout" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            AgriPlot Vision
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">PhenoVis</span>
+          </h1>
+          <p class="text-xs text-slate-400" id="study-subtitle">TNDAIS 2024 Sheath Blight Drone Phenotyping</p>
+        </div>
+      </div>
+
+      <!-- Quick Metrics & Global Controls -->
+      <div class="flex items-center space-x-3">
+        <!-- Replicate Filter -->
+        <div class="flex items-center bg-slate-800/80 p-1 rounded-lg border border-slate-700 text-xs">
+          <span class="text-slate-400 px-2 flex items-center gap-1"><i data-lucide="layers" class="w-3.5 h-3.5"></i> Rep:</span>
+          <button id="rep-filter-all" onclick="setGlobalReplicate(null)" class="px-2.5 py-1 rounded font-medium transition bg-emerald-600 text-white shadow-sm">All (348)</button>
+          <button id="rep-filter-1" onclick="setGlobalReplicate(1)" class="px-2.5 py-1 rounded font-medium transition text-slate-300 hover:text-white hover:bg-slate-700">Rep 1</button>
+          <button id="rep-filter-2" onclick="setGlobalReplicate(2)" class="px-2.5 py-1 rounded font-medium transition text-slate-300 hover:text-white hover:bg-slate-700">Rep 2</button>
+        </div>
+
+        <!-- Download Plot Button -->
+        <button onclick="downloadActivePlot()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition" title="Download currently visible plot as high-resolution PNG">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Download Plot
+        </button>
+
+        <!-- Upload CSV Button -->
+        <button onclick="openUploadModal()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload CSV
+        </button>
+
+        <!-- API Docs link -->
+        <a href="/docs" target="_blank" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition" title="FastAPI Interactive Swagger Docs">
+          <i data-lucide="file-code" class="w-5 h-5"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- EXPERIMENT SUMMARY BANNER -->
+  <section class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 sm:px-6">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between text-xs text-slate-400 gap-y-2">
+      <div class="flex items-center space-x-4 flex-wrap">
+        <span class="flex items-center gap-1.5 text-slate-300 font-medium">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span id="meta-location">Tainan DARES Greenhouse</span>
+        </span>
+        <span class="text-slate-600">|</span>
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="grid" class="w-3.5 h-3.5 text-blue-400"></i>
+          <span id="meta-plots">348 Plots</span> (90 Rows × 4 Columns)
+        </span>
+        <span class="text-slate-600">|</span>
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="dna" class="w-3.5 h-3.5 text-purple-400"></i>
+          <span id="meta-germplasms">174 Germplasms</span>
+        </span>
+        <span class="text-slate-600">|</span>
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="activity" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="meta-traits">225 Spectral Traits</span>
+        </span>
+        <span class="text-slate-600">|</span>
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="image" class="w-3.5 h-3.5 text-pink-400"></i>
+          <span id="meta-images">18 Image Channels</span>
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          ● FastAPIServer Active
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="bg-slate-900/60 border-b border-slate-800 sticky top-16 z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 py-2 overflow-x-auto">
+      <button onclick="switchTab('heatmap')" id="tab-btn-heatmap" class="tab-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="layout-grid" class="w-4 h-4"></i> Field Heatmap (Spatial)
+      </button>
+      <button onclick="switchTab('histogram')" id="tab-btn-histogram" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="bar-chart-2" class="w-4 h-4"></i> Distribution & Histogram
+      </button>
+      <button onclick="switchTab('scatter')" id="tab-btn-scatter" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="trending-up" class="w-4 h-4"></i> Relative Plots & Scatter
+      </button>
+      <button onclick="switchTab('correlation')" id="tab-btn-correlation" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="git-commit" class="w-4 h-4"></i> Correlation Matrix
+      </button>
+      <button onclick="switchTab('rankings')" id="tab-btn-rankings" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="award" class="w-4 h-4"></i> Germplasm Performance
+      </button>
+      <button onclick="switchTab('plot-inspector')" id="tab-btn-plot-inspector" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 flex items-center gap-2 transition whitespace-nowrap">
+        <i data-lucide="image" class="w-4 h-4"></i> Plot Inspector & Imagery
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- ==================== TAB 1: FIELD HEATMAP ==================== -->
+    <div id="tab-content-heatmap" class="space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Vegetation Index / Reflectance Metric</label>
+            <select id="heatmap-metric-select" onchange="loadFieldHeatmap()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-80 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Color Palette</label>
+            <select id="heatmap-colorscale-select" onchange="updateHeatmapColorscale()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <option value="Viridis" selected>Viridis (Standard)</option>
+              <option value="YlGn">YlGn (Vegetation Green)</option>
+              <option value="YlGnBu">YlGnBu (Blue-Green)</option>
+              <option value="Plasma">Plasma (High Contrast)</option>
+              <option value="RdYlGn">RdYlGn (Red-Yellow-Green)</option>
+              <option value="Earth">Earth</option>
+              <option value="Jet">Jet</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700/80 flex items-center gap-1.5">
+            <i data-lucide="mouse-pointer" class="w-3.5 h-3.5 text-emerald-400"></i>
+            Tip: Click any cell to open Plot Details & Images!
+          </span>
+          <button onclick="downloadPlot('heatmap-plot-container', 'field_spatial_heatmap.png')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Download Heatmap Image">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot
+          </button>
+          <button onclick="loadFieldHeatmap()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Field Layout Card -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <!-- Main Spatial Heatmap Plot -->
+        <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 id="heatmap-chart-title" class="text-sm font-semibold text-slate-200">Field Spatial Heatmap</h2>
+              <p class="text-xs text-slate-400" id="heatmap-chart-desc">90 Rows × 4 Columns layout. Col 1-2: Replicate 2 | Col 3-4: Replicate 1</p>
+            </div>
+            <div id="heatmap-stats-badge" class="text-xs text-slate-300 font-mono bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+              Min: - | Mean: - | Max: -
+            </div>
+          </div>
+          <div id="heatmap-plot-container" class="w-full h-[620px] rounded-lg"></div>
+        </div>
+
+        <!-- Heatmap Quick Inspector Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i data-lucide="info" class="w-4 h-4 text-emerald-400"></i> Selected Plot
+              </h3>
+              <span id="selected-plot-rep-badge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                Click Heatmap
+              </span>
+            </div>
+
+            <div id="heatmap-selection-info" class="space-y-3 text-xs">
+              <div class="p-3 rounded-lg bg-slate-800/50 border border-slate-700/60 text-slate-400 text-center">
+                <i data-lucide="hand" class="w-6 h-6 mx-auto mb-1 text-slate-500"></i>
+                Click on any plot in the field heatmap on the left to inspect its traits, spectral curve, and imagery.
+              </div>
+            </div>
+          </div>
+
+          <div id="heatmap-selection-action" class="pt-4 border-t border-slate-800 hidden">
+            <button id="btn-view-plot-detail" onclick="viewSelectedPlotInInspector()" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center justify-center gap-2 transition shadow">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i> View 18 Plot Images
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: HISTOGRAM & DISTRIBUTION ==================== -->
+    <div id="tab-content-histogram" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Select Metric</label>
+            <select id="hist-metric-select" onchange="loadDistribution()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-80 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Bins (<span id="bins-count-label">25</span>)</label>
+            <input id="hist-bins-slider" type="range" min="10" max="60" value="25" oninput="document.getElementById('bins-count-label').innerText = this.value; loadDistribution()" class="w-32 accent-emerald-500">
+          </div>
+
+          <div class="flex items-center gap-2 pt-4">
+            <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="hist-kde-toggle" checked onchange="renderDistributionChart()" class="rounded bg-slate-800 border-slate-700 text-emerald-600 focus:ring-0">
+              Show Density (KDE)
+            </label>
+            <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer ml-3">
+              <input type="checkbox" id="hist-rep-split-toggle" checked onchange="renderDistributionChart()" class="rounded bg-slate-800 border-slate-700 text-emerald-600 focus:ring-0">
+              Split Replicates
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="downloadPlot('distribution-plot-container', 'distribution_histogram.png')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Download Histogram Plot">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot
+          </button>
+          <button onclick="loadDistribution()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Update Plot
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Cards & Histogram Plot -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">Total Count</p>
+          <p id="stat-count" class="text-lg font-bold text-slate-100 font-mono">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">Mean</p>
+          <p id="stat-mean" class="text-lg font-bold text-emerald-400 font-mono">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">Median</p>
+          <p id="stat-median" class="text-lg font-bold text-slate-100 font-mono">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">Std Dev</p>
+          <p id="stat-std" class="text-lg font-bold text-slate-100 font-mono">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">IQR (Q3 - Q1)</p>
+          <p id="stat-iqr" class="text-lg font-bold text-slate-100 font-mono">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <p class="text-[11px] font-medium text-slate-400">Skewness</p>
+          <p id="stat-skew" class="text-lg font-bold text-slate-100 font-mono">-</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div id="distribution-plot-container" class="w-full h-[520px]"></div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: RELATIVE PLOTS & SCATTER ==================== -->
+    <div id="tab-content-scatter" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">X-Axis Metric</label>
+              <select id="scatter-x-select" onchange="loadScatter()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-64 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Y-Axis Metric</label>
+              <select id="scatter-y-select" onchange="loadScatter()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-64 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Color Points By</label>
+              <select id="scatter-color-select" onchange="loadScatter()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <option value="replicate">Replicate (1 vs 2)</option>
+                <option value="entryType">Entry Type</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="downloadPlot('scatter-plot-container', 'relative_scatter_plot.png')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Download Scatter Plot">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot
+            </button>
+            <button onclick="loadScatter()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Update Scatter
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick preset relative pairs -->
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-800 text-xs text-slate-400">
+          <span class="font-medium text-slate-300">Quick Relative Presets:</span>
+          <button onclick="setScatterPreset('NDVI', 'NDRE')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">NDVI vs NDRE</button>
+          <button onclick="setScatterPreset('Red', 'NIR')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">Red vs NIR (Spectral)</button>
+          <button onclick="setScatterPreset('CCC', 'TGI')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">CCC vs TGI</button>
+          <button onclick="setScatterPreset('NDVI', 'VARI')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">NDVI vs VARI</button>
+        </div>
+      </div>
+
+      <!-- Regression summary banner -->
+      <div id="scatter-regression-banner" class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs font-mono">
+        <span class="text-slate-300 flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+          <span id="regression-equation">Calculating linear regression...</span>
+        </span>
+        <div class="flex items-center gap-4 text-slate-400">
+          <span>Pearson r: <strong id="reg-r" class="text-emerald-400 font-bold">-</strong></span>
+          <span>R²: <strong id="reg-r2" class="text-blue-400 font-bold">-</strong></span>
+          <span>p-value: <strong id="reg-p" class="text-purple-400 font-bold">-</strong></span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div id="scatter-plot-container" class="w-full h-[550px]"></div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 4: CORRELATION MATRIX ==================== -->
+    <div id="tab-content-correlation" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-200">Pairwise Pearson Correlation Matrix</h2>
+          <p class="text-xs text-slate-400">Reveals cross-correlations between Vegetation Indices (NDVI, NDRE, CCC, TGI, VARI) and Reflectance Bands (B, G, R, RE, NIR).</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadPlot('correlation-plot-container', 'correlation_matrix.png')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Download Correlation Matrix">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot
+          </button>
+          <button onclick="loadCorrelationMatrix()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Matrix
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div id="correlation-plot-container" class="w-full h-[600px]"></div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 5: GERMPLASM RANKING ==================== -->
+    <div id="tab-content-rankings" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Phenotypic Trait</label>
+            <select id="ranking-metric-select" onchange="loadGermplasmRanking()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-80 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Top N Germplasms</label>
+            <select id="ranking-top-select" onchange="loadGermplasmRanking()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <option value="10">Top 10</option>
+              <option value="15" selected>Top 15</option>
+              <option value="25">Top 25</option>
+              <option value="40">Top 40</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Sort Direction</label>
+            <select id="ranking-sort-select" onchange="loadGermplasmRanking()" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <option value="desc" selected>Highest First (Top Performers)</option>
+              <option value="asc">Lowest First (Disease Sensitive)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="downloadPlot('ranking-plot-container', 'germplasm_ranking_boxplot.png')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Download Ranking Plot">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot
+          </button>
+          <button onclick="loadGermplasmRanking()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Update Rankings
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div id="ranking-plot-container" class="w-full h-[580px]"></div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 6: PLOT INSPECTOR & IMAGERY ==================== -->
+    <div id="tab-content-plot-inspector" class="space-y-4 hidden">
+      <!-- Plot Selector Bar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Select or Search Plot</label>
+            <div class="flex items-center gap-2">
+              <select id="inspector-plot-select" onchange="loadPlotInspector(this.value)" class="bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-72 focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono">
+                <!-- Populated dynamically with all 348 plots -->
+              </select>
+              <button onclick="selectRandomPlot()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700" title="Inspect Random Plot">
+                <i data-lucide="dice-5" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Channel Filter for Images -->
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Image Category Filter</label>
+            <div class="flex items-center bg-slate-800 p-1 rounded-lg border border-slate-700 text-xs">
+              <button onclick="filterImageGallery('all')" class="img-cat-btn px-2.5 py-1 rounded text-white bg-emerald-600 font-medium" data-cat="all">All (18)</button>
+              <button onclick="filterImageGallery('RGB')" class="img-cat-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-cat="RGB">RGB</button>
+              <button onclick="filterImageGallery('Vegetation Indices')" class="img-cat-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-cat="Vegetation Indices">Vegetation Indices</button>
+              <button onclick="filterImageGallery('Reflectance Bands')" class="img-cat-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-cat="Reflectance Bands">Raw Bands</button>
+              <button onclick="filterImageGallery('Thresholded Bands')" class="img-cat-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-cat="Thresholded Bands">Thresholded</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="downloadPlotReport()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition" title="Export this plot's metadata, indices, and imagery URLs">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i> Download Plot Data
+          </button>
+          <button onclick="toggleCompareMode()" id="btn-compare-mode" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition">
+            <i data-lucide="columns" class="w-3.5 h-3.5"></i> Side-by-Side Compare
+          </button>
+        </div>
+      </div>
+
+      <!-- Plot Overview Header -->
+      <div id="plot-header-card" class="bg-gradient-to-r from-slate-900 to-slate-800/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="plot-id-display" class="text-xl font-bold text-white font-mono">Plot #2003</h2>
+              <span id="plot-germplasm-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                SheathBlight_Tainan_3
+              </span>
+              <span id="plot-rep-badge" class="px-2 py-0.5 rounded text-xs font-mono bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                Replicate 2
+              </span>
+            </div>
+            <p id="plot-coords-display" class="text-xs text-slate-400 mt-1">
+              Position: Row 3, Column 1 | Unit ID: 2024_2_Tainan_SheathBlight_2_3 | Study: TNDAIS 2024
+            </p>
+          </div>
+
+          <!-- Quick Indices Chips -->
+          <div id="plot-indices-chips" class="flex items-center gap-2 flex-wrap">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-side Compare View (Collapsible) -->
+      <div id="compare-view-container" class="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 shadow-sm hidden">
+        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+          <h3 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="split" class="w-4 h-4"></i> Dual Image Comparison
+          </h3>
+          <span class="text-[11px] text-slate-400">Select two channels below to examine side by side</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Left Channel -->
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div class="mb-2">
+              <label class="block text-[11px] text-slate-400 mb-1">Left Channel</label>
+              <select id="compare-select-left" onchange="updateCompareImages()" class="w-full bg-slate-800 border border-slate-700 text-xs rounded px-2.5 py-1.5 text-slate-200">
+                <!-- populated -->
+              </select>
+            </div>
+            <div class="h-64 rounded bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-800 relative group">
+              <img id="compare-img-left" src="" alt="Left Channel" class="max-h-full max-w-full object-contain" onerror="handleImageError(this)">
+              <div class="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded text-[11px] text-slate-300 font-mono" id="compare-lbl-left">-</div>
+            </div>
+          </div>
+          <!-- Right Channel -->
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div class="mb-2">
+              <label class="block text-[11px] text-slate-400 mb-1">Right Channel</label>
+              <select id="compare-select-right" onchange="updateCompareImages()" class="w-full bg-slate-800 border border-slate-700 text-xs rounded px-2.5 py-1.5 text-slate-200">
+                <!-- populated -->
+              </select>
+            </div>
+            <div class="h-64 rounded bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-800 relative group">
+              <img id="compare-img-right" src="" alt="Right Channel" class="max-h-full max-w-full object-contain" onerror="handleImageError(this)">
+              <div class="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded text-[11px] text-slate-300 font-mono" id="compare-lbl-right">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spectral Signature Plot & 18 Image Channels Gallery -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Spectral Signature Profile -->
+        <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i> Spectral Reflectance Signature
+              </h3>
+              <button onclick="downloadPlot('spectral-plot-container', `plot_${AppState.selectedPlotId}_spectral_signature.png`)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition" title="Download Spectral Signature Image">
+                <i data-lucide="download" class="w-3 h-3 text-emerald-400"></i> Download Plot
+              </button>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">Reflectance across Blue (485nm), Green (560nm), Red (645nm), Red Edge (720nm), and NIR (840nm).</p>
+            <div id="spectral-plot-container" class="w-full h-[320px]"></div>
+          </div>
+
+          <div class="mt-4 p-3 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs text-slate-400">
+            <span class="text-slate-300 font-medium block mb-1">Agronomic Interpretation:</span>
+            A steep Red-to-NIR jump indicates healthy chlorophyll and dense green canopy. Depressed Red Edge/NIR suggests sheath blight lesion or tissue stress.
+          </div>
+        </div>
+
+        <!-- 18 Images Gallery Grid -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+                Multispectral & Vegetation Imagery Gallery
+              </h3>
+              <p class="text-xs text-slate-400">High-resolution segmented polygon drone imagery for this plot.</p>
+            </div>
+            <span id="gallery-count-badge" class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+              18 channels
+            </span>
+          </div>
+
+          <!-- Cards Grid -->
+          <div id="images-grid-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 max-h-[640px] overflow-y-auto pr-1">
+            <!-- Dynamically populated 18 cards -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- IMAGE ZOOM MODAL -->
+  <div id="image-zoom-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="image" class="w-5 h-5 text-emerald-400"></i>
+          <div>
+            <h3 id="modal-image-title" class="text-sm font-bold text-white">Image Channel</h3>
+            <p id="modal-image-subtitle" class="text-xs text-slate-400">Plot #2003</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <a id="modal-direct-link" href="#" target="_blank" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Open Direct URL
+          </a>
+          <button onclick="closeZoomModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6 flex items-center justify-center bg-slate-950 min-h-[400px] max-h-[75vh] overflow-auto">
+        <img id="modal-image-src" src="" alt="Enlarged Plot Image" class="max-h-full max-w-full object-contain rounded shadow" onerror="handleImageError(this)">
+      </div>
+      <div class="p-3 border-t border-slate-800 bg-slate-900/90 text-xs text-slate-400 flex items-center justify-between">
+        <span class="font-mono text-[11px] truncate max-w-lg" id="modal-image-url-display"></span>
+        <button onclick="copyModalUrl()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1">
+          <i data-lucide="copy" class="w-3 h-3"></i> Copy URL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD CSV MODAL -->
+  <div id="upload-csv-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="upload-cloud" class="w-5 h-5 text-emerald-400"></i> Upload Dataset CSV
+        </h3>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300">
+        Upload another multispectral or phenotypic trial CSV with reflectance and vegetative index columns.
+      </p>
+
+      <form id="upload-form" onsubmit="handleCsvUpload(event)" class="space-y-4">
+        <div class="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-emerald-500 transition cursor-pointer" onclick="document.getElementById('csv-file-input').click()">
+          <i data-lucide="file-spreadsheet" class="w-8 h-8 mx-auto text-emerald-400 mb-2"></i>
+          <p class="text-xs font-medium text-slate-200">Click to select CSV file</p>
+          <p class="text-[11px] text-slate-500 mt-1" id="file-chosen-name">Tainan2024.csv or equivalent</p>
+          <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="document.getElementById('file-chosen-name').innerText = this.files[0]?.name || ''">
+        </div>
+
+        <div id="upload-status-msg" class="text-xs font-mono hidden"></div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeUploadModal()" class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+          <button type="submit" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">Upload & Visualize</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT -->
+  <script>
+    // State store
+    const AppState = {
+      replicate: null, // null = all, 1 or 2
+      activeTab: 'heatmap',
+      traits: [],
+      imagesCatalog: [],
+      studyInfo: {},
+      currentHeatmapData: null,
+      currentPlotData: null,
+      selectedPlotId: 2003,
+      currentImageCategory: 'all'
+    };
+
+    // Plotly dark layout template
+    const darkPlotlyLayout = {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { family: 'Inter, sans-serif', color: '#94a3b8' },
+      margin: { l: 50, r: 30, t: 30, b: 50 },
+      xaxis: {
+        gridcolor: '#1e293b',
+        zerolinecolor: '#334155',
+        tickfont: { color: '#94a3b8' }
+      },
+      yaxis: {
+        gridcolor: '#1e293b',
+        zerolinecolor: '#334155',
+        tickfont: { color: '#94a3b8' }
+      }
+    };
+
+    // On page initialization
+    document.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await fetchInitialData();
+      populateDropdowns();
+      await loadFieldHeatmap();
+      await loadPlotInspector(AppState.selectedPlotId);
+    });
+
+    async function fetchInitialData() {
+      try {
+        const [infoRes, traitsRes, imagesRes] = await Promise.all([
+          fetch('/plot/info'),
+          fetch('/plot/traits'),
+          fetch('/plot/images')
+        ]);
+        const info = await infoRes.json();
+        AppState.studyInfo = info.info || {};
+        AppState.traits = await traitsRes.json();
+        AppState.imagesCatalog = await imagesRes.json();
+
+        // Update header badges
+        document.getElementById('study-subtitle').innerText = `${AppState.studyInfo.studyName || '2024'} Sheath Blight Drone Phenotyping`;
+        document.getElementById('meta-location').innerText = AppState.studyInfo.locationName || 'Tainan DARES';
+        document.getElementById('meta-plots').innerText = `${AppState.studyInfo.totalPlots || 348} Plots`;
+        document.getElementById('meta-germplasms').innerText = `${AppState.studyInfo.totalGermplasms || 174} Germplasms`;
+        document.getElementById('meta-traits').innerText = `${AppState.studyInfo.totalMetrics || 225} Traits`;
+        document.getElementById('meta-images').innerText = `${AppState.imagesCatalog.length} Image Channels`;
+      } catch (err) {
+        console.error("Initialization error:", err);
+      }
+    }
+
+    function populateDropdowns() {
+      const heatmapSelect = document.getElementById('heatmap-metric-select');
+      const histSelect = document.getElementById('hist-metric-select');
+      const scatterX = document.getElementById('scatter-x-select');
+      const scatterY = document.getElementById('scatter-y-select');
+      const rankSelect = document.getElementById('ranking-metric-select');
+
+      const selects = [heatmapSelect, histSelect, scatterX, scatterY, rankSelect];
+      selects.forEach(s => { if (s) s.innerHTML = ''; });
+
+      // Group traits by category
+      const categories = {};
+      AppState.traits.forEach(t => {
+        if (!categories[t.category]) categories[t.category] = [];
+        categories[t.category].push(t);
+      });
+
+      for (const [catName, traitList] of Object.entries(categories)) {
+        selects.forEach(sel => {
+          if (!sel) return;
+          const optGroup = document.createElement('optgroup');
+          optGroup.label = catName;
+          
+          traitList.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.column;
+            opt.innerText = t.name;
+            if (t.is_primary && t.name.includes('NDVI')) opt.selected = true;
+            optGroup.appendChild(opt);
+          });
+          sel.appendChild(optGroup);
+        });
+      }
+
+      // Default scatter Y to NDRE
+      const ndreTrait = AppState.traits.find(t => t.name.includes('Mean Pixel Value') && t.name.includes('NDRE'));
+      if (ndreTrait && scatterY) {
+        scatterY.value = ndreTrait.column;
+      }
+
+      // Populate plot selector with all plots
+      fetch('/plot/plots').then(res => res.json()).then(plots => {
+        const plotSelect = document.getElementById('inspector-plot-select');
+        if (plotSelect) {
+          plotSelect.innerHTML = '';
+          plots.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.plotNumber;
+            opt.innerText = `Plot #${p.plotNumber} - ${p.germplasmName} (Rep ${p.replicate}, R${p.rowNumber}C${p.colNumber})`;
+            if (p.plotNumber === 2003) opt.selected = true;
+            plotSelect.appendChild(opt);
+          });
+        }
+      });
+    }
+
+    // Global Replicate Switcher
+    function setGlobalReplicate(rep) {
+      AppState.replicate = rep;
+      
+      const btnAll = document.getElementById('rep-filter-all');
+      const btn1 = document.getElementById('rep-filter-1');
+      const btn2 = document.getElementById('rep-filter-2');
+
+      [btnAll, btn1, btn2].forEach(b => {
+        b.className = "px-2.5 py-1 rounded font-medium transition text-slate-300 hover:text-white hover:bg-slate-700";
+      });
+
+      if (rep === null) btnAll.className = "px-2.5 py-1 rounded font-medium transition bg-emerald-600 text-white shadow-sm";
+      else if (rep === 1) btn1.className = "px-2.5 py-1 rounded font-medium transition bg-emerald-600 text-white shadow-sm";
+      else if (rep === 2) btn2.className = "px-2.5 py-1 rounded font-medium transition bg-emerald-600 text-white shadow-sm";
+
+      // Refresh current active view
+      if (AppState.activeTab === 'heatmap') loadFieldHeatmap();
+      else if (AppState.activeTab === 'histogram') loadDistribution();
+      else if (AppState.activeTab === 'scatter') loadScatter();
+    }
+
+    // Tab Switcher
+    function switchTab(tabId) {
+      AppState.activeTab = tabId;
+
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const tabs = ['heatmap', 'histogram', 'scatter', 'correlation', 'rankings', 'plot-inspector'];
+      tabs.forEach(t => {
+        const el = document.getElementById(`tab-content-${t}`);
+        if (el) el.classList.toggle('hidden', t !== tabId);
+      });
+
+      // Lazy load tab data
+      if (tabId === 'heatmap') loadFieldHeatmap();
+      else if (tabId === 'histogram') loadDistribution();
+      else if (tabId === 'scatter') loadScatter();
+      else if (tabId === 'correlation') loadCorrelationMatrix();
+      else if (tabId === 'rankings') loadGermplasmRanking();
+      else if (tabId === 'plot-inspector') loadPlotInspector(AppState.selectedPlotId);
+
+      // Re-initialize icons
+      lucide.createIcons();
+    }
+
+    // ==================== 1. FIELD HEATMAP ====================
+    async function loadFieldHeatmap() {
+      const metric = document.getElementById('heatmap-metric-select')?.value || '';
+      const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
+      
+      try {
+        const res = await fetch(`/plot/field-heatmap?metric=${encodeURIComponent(metric)}${repParam}`);
+        const data = await res.json();
+        AppState.currentHeatmapData = data;
+
+        document.getElementById('heatmap-chart-title').innerText = `${data.metricName} - Field Heatmap`;
+        document.getElementById('heatmap-stats-badge').innerText = `Min: ${data.min.toFixed(4)} | Mean: ${data.mean.toFixed(4)} | Max: ${data.max.toFixed(4)}`;
+
+        renderFieldHeatmap(data);
+      } catch (err) {
+        console.error("Heatmap load error:", err);
+      }
+    }
+
+    function renderFieldHeatmap(data) {
+      const colorscale = document.getElementById('heatmap-colorscale-select')?.value || 'Viridis';
+      
+      // Plotly heatmap: x = cols, y = rows, z = 2d array
+      const trace = {
+        z: data.z,
+        x: data.cols.map(c => `Col ${c}`),
+        y: data.rows.map(r => `Row ${r}`),
+        text: data.hover,
+        hoverinfo: 'text',
+        type: 'heatmap',
+        colorscale: colorscale,
+        colorbar: {
+          title: { text: data.metricName, font: { color: '#cbd5e1', size: 11 } },
+          tickfont: { color: '#94a3b8', size: 10 },
+          len: 0.9
+        }
+      };
+
+      const layout = {
+        ...darkPlotlyLayout,
+        title: false,
+        xaxis: {
+          title: { text: 'Field Column (Col 1-2: Rep 2 | Col 3-4: Rep 1)', font: { size: 11, color: '#94a3b8' } },
+          tickfont: { color: '#cbd5e1' },
+          side: 'top'
+        },
+        yaxis: {
+          title: { text: 'Field Row (1 to 90)', font: { size: 11, color: '#94a3b8' } },
+          autorange: 'reversed', // Row 1 at top
+          tickfont: { color: '#cbd5e1' }
+        }
+      };
+
+      const config = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+
+      Plotly.newPlot('heatmap-plot-container', [trace], layout, config);
+
+      // Add click listener to select a plot!
+      const plotEl = document.getElementById('heatmap-plot-container');
+      plotEl.removeAllListeners && plotEl.removeAllListeners('plotly_click');
+      plotEl.on('plotly_click', (evtData) => {
+        if (!evtData.points || !evtData.points[0]) return;
+        const pt = evtData.points[0];
+        const rowIdx = pt.pointIndex[0];
+        const colIdx = pt.pointIndex[1];
+        const rowNum = data.rows[rowIdx];
+        const colNum = data.cols[colIdx];
+
+        // Find cell in data.cells
+        const cell = data.cells.find(c => c.row === rowNum && c.col === colNum);
+        if (cell) {
+          selectPlotFromHeatmap(cell);
+        }
+      });
+    }
+
+    function updateHeatmapColorscale() {
+      if (AppState.currentHeatmapData) renderFieldHeatmap(AppState.currentHeatmapData);
+    }
+
+    function selectPlotFromHeatmap(cell) {
+      AppState.selectedPlotId = cell.plotNumber;
+      
+      const infoContainer = document.getElementById('heatmap-selection-info');
+      const repBadge = document.getElementById('selected-plot-rep-badge');
+      const actionDiv = document.getElementById('heatmap-selection-action');
+
+      repBadge.innerText = `Plot #${cell.plotNumber} (Rep ${cell.replicate})`;
+
+      infoContainer.innerHTML = `
+        <div class="space-y-2 p-3 rounded-lg bg-slate-800/80 border border-slate-700">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Germplasm:</span>
+            <span class="font-bold text-emerald-400 font-mono">${cell.germplasmName}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Location:</span>
+            <span class="font-mono text-slate-200">Row ${cell.row}, Col ${cell.col}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Value:</span>
+            <span class="font-bold font-mono text-white text-sm">${cell.value !== null ? cell.value : 'N/A'}</span>
+          </div>
+        </div>
+      `;
+
+      actionDiv.classList.remove('hidden');
+    }
+
+    function viewSelectedPlotInInspector() {
+      switchTab('plot-inspector');
+      loadPlotInspector(AppState.selectedPlotId);
+    }
+
+    // ==================== 2. HISTOGRAM & DISTRIBUTION ====================
+    async function loadDistribution() {
+      const metric = document.getElementById('hist-metric-select')?.value || '';
+      const bins = document.getElementById('hist-bins-slider')?.value || 25;
+      const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
+
+      try {
+        const res = await fetch(`/plot/distribution?metric=${encodeURIComponent(metric)}&bins=${bins}${repParam}`);
+        const data = await res.json();
+        AppState.currentDistributionData = data;
+
+        // Update stats cards
+        const s = data.stats;
+        document.getElementById('stat-count').innerText = s.count || '-';
+        document.getElementById('stat-mean').innerText = s.mean?.toFixed(4) || '-';
+        document.getElementById('stat-median').innerText = s.median?.toFixed(4) || '-';
+        document.getElementById('stat-std').innerText = s.std?.toFixed(4) || '-';
+        document.getElementById('stat-iqr').innerText = s.iqr?.toFixed(4) || '-';
+        document.getElementById('stat-skew').innerText = s.skew?.toFixed(2) || '-';
+
+        renderDistributionChart();
+      } catch (err) {
+        console.error("Distribution load error:", err);
+      }
+    }
+
+    function renderDistributionChart() {
+      const data = AppState.currentDistributionData;
+      if (!data) return;
+
+      const showKde = document.getElementById('hist-kde-toggle')?.checked;
+      const splitRep = document.getElementById('hist-rep-split-toggle')?.checked;
+
+      const traces = [];
+
+      if (splitRep && data.rep1Values?.length && data.rep2Values?.length) {
+        traces.push({
+          x: data.rep1Values,
+          type: 'histogram',
+          name: 'Replicate 1',
+          opacity: 0.7,
+          marker: { color: '#0ea5e9' } // Blue
+        });
+        traces.push({
+          x: data.rep2Values,
+          type: 'histogram',
+          name: 'Replicate 2',
+          opacity: 0.7,
+          marker: { color: '#10b981' } // Green
+        });
+      } else {
+        traces.push({
+          x: data.allValues,
+          type: 'histogram',
+          name: 'All Plots',
+          marker: { color: '#10b981' }
+        });
+      }
+
+      if (showKde && data.kde && data.kde.x && data.kde.x.length > 0) {
+        // Scale KDE to match histogram height
+        const maxCount = Math.max(...data.counts);
+        const maxKde = Math.max(...data.kde.y);
+        const scale = maxCount / (maxKde || 1);
+        traces.push({
+          x: data.kde.x,
+          y: data.kde.y.map(y => y * scale),
+          type: 'scatter',
+          mode: 'lines',
+          name: 'Density (KDE)',
+          line: { color: '#f59e0b', width: 2.5 }
+        });
+      }
+
+      const layout = {
+        ...darkPlotlyLayout,
+        barmode: splitRep ? 'overlay' : 'group',
+        title: { text: `Histogram & Distribution - ${data.metricName}`, font: { color: '#e2e8f0', size: 13 } },
+        xaxis: { title: { text: data.metricName, font: { color: '#94a3b8' } }, gridcolor: '#1e293b' },
+        yaxis: { title: { text: 'Plot Count', font: { color: '#94a3b8' } }, gridcolor: '#1e293b' },
+        legend: { orientation: 'h', y: -0.2, font: { color: '#cbd5e1' } }
+      };
+
+      Plotly.newPlot('distribution-plot-container', traces, layout, { responsive: true, displaylogo: false });
+    }
+
+    // ==================== 3. SCATTER & RELATIVE PLOTS ====================
+    async function loadScatter() {
+      const x = document.getElementById('scatter-x-select')?.value || '';
+      const y = document.getElementById('scatter-y-select')?.value || '';
+      const colorBy = document.getElementById('scatter-color-select')?.value || 'replicate';
+      const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
+
+      try {
+        const res = await fetch(`/plot/scatter?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&color_by=${colorBy}${repParam}`);
+        const data = await res.json();
+
+        // Update regression stats
+        const reg = data.regression || {};
+        document.getElementById('regression-equation').innerText = reg.equation || 'Regression calculated';
+        document.getElementById('reg-r').innerText = reg.r !== undefined ? reg.r.toFixed(4) : '-';
+        document.getElementById('reg-r2').innerText = reg.r2 !== undefined ? reg.r2.toFixed(4) : '-';
+        document.getElementById('reg-p').innerText = reg.pValue !== undefined ? reg.pValue.toExponential(2) : '-';
+
+        renderScatterChart(data);
+      } catch (err) {
+        console.error("Scatter load error:", err);
+      }
+    }
+
+    function renderScatterChart(data) {
+      // Group points by color
+      const groups = {};
+      data.points.forEach(pt => {
+        const key = `Group ${pt.color}`;
+        if (!groups[key]) groups[key] = { x: [], y: [], text: [] };
+        groups[key].x.push(pt.x);
+        groups[key].y.push(pt.y);
+        groups[key].text.push(`Plot #${pt.plotNumber} (${pt.germplasmName})<br>Rep ${pt.replicate} | Row ${pt.row}, Col ${pt.col}<br>X: ${pt.x}<br>Y: ${pt.y}`);
+      });
+
+      const colors = ['#10b981', '#0ea5e9', '#a855f7', '#f59e0b'];
+      const traces = [];
+      let cIdx = 0;
+
+      for (const [grpName, grpData] of Object.entries(groups)) {
+        traces.push({
+          x: grpData.x,
+          y: grpData.y,
+          text: grpData.text,
+          hoverinfo: 'text',
+          mode: 'markers',
+          type: 'scatter',
+          name: grpName.replace('Group 1', 'Replicate 1').replace('Group 2', 'Replicate 2'),
+          marker: {
+            size: 8,
+            color: colors[cIdx % colors.length],
+            opacity: 0.85,
+            line: { width: 1, color: '#ffffff' }
+          }
+        });
+        cIdx++;
+      }
+
+      // Add Trendline if exists
+      if (data.trendline && data.trendline.length === 2) {
+        traces.push({
+          x: [data.trendline[0].x, data.trendline[1].x],
+          y: [data.trendline[0].y, data.trendline[1].y],
+          mode: 'lines',
+          type: 'scatter',
+          name: 'Linear Fit',
+          line: { color: '#f43f5e', width: 2.5, dash: 'dash' }
+        });
+      }
+
+      const layout = {
+        ...darkPlotlyLayout,
+        title: { text: `Relative Plot: ${data.yName} vs ${data.xName}`, font: { color: '#e2e8f0', size: 13 } },
+        xaxis: { title: { text: data.xName, font: { color: '#94a3b8' } }, gridcolor: '#1e293b' },
+        yaxis: { title: { text: data.yName, font: { color: '#94a3b8' } }, gridcolor: '#1e293b' },
+        legend: { orientation: 'h', y: -0.2, font: { color: '#cbd5e1' } }
+      };
+
+      Plotly.newPlot('scatter-plot-container', traces, layout, { responsive: true, displaylogo: false });
+    }
+
+    function setScatterPreset(xKey, yKey) {
+      const selectX = document.getElementById('scatter-x-select');
+      const selectY = document.getElementById('scatter-y-select');
+
+      const matchX = AppState.traits.find(t => t.name.includes(xKey) && (t.name.includes('Mean') || t.name.includes('Original')));
+      const matchY = AppState.traits.find(t => t.name.includes(yKey) && (t.name.includes('Mean') || t.name.includes('Original')));
+
+      if (matchX && selectX) selectX.value = matchX.column;
+      if (matchY && selectY) selectY.value = matchY.column;
+      loadScatter();
+    }
+
+    // ==================== 4. CORRELATION MATRIX ====================
+    async function loadCorrelationMatrix() {
+      try {
+        const res = await fetch('/plot/correlation-matrix');
+        const data = await res.json();
+
+        const trace = {
+          z: data.z,
+          x: data.labels,
+          y: data.labels,
+          type: 'heatmap',
+          colorscale: 'RdBu',
+          reversescale: true,
+          zmin: -1,
+          zmax: 1,
+          colorbar: { title: 'Pearson r', tickfont: { color: '#94a3b8' } }
+        };
+
+        const layout = {
+          ...darkPlotlyLayout,
+          title: false,
+          margin: { l: 140, r: 40, t: 30, b: 120 },
+          xaxis: { tickangle: -45, tickfont: { color: '#cbd5e1', size: 10 } },
+          yaxis: { tickfont: { color: '#cbd5e1', size: 10 } }
+        };
+
+        Plotly.newPlot('correlation-plot-container', [trace], layout, { responsive: true, displaylogo: false });
+      } catch (err) {
+        console.error("Correlation load error:", err);
+      }
+    }
+
+    // ==================== 5. GERMPLASM RANKING ====================
+    async function loadGermplasmRanking() {
+      const metric = document.getElementById('ranking-metric-select')?.value || '';
+      const topN = document.getElementById('ranking-top-select')?.value || 15;
+      const sortDir = document.getElementById('ranking-sort-select')?.value || 'desc';
+      const isAsc = sortDir === 'asc';
+
+      try {
+        const res = await fetch(`/plot/germplasm-ranking?metric=${encodeURIComponent(metric)}&top_n=${topN}&ascending=${isAsc}`);
+        const data = await res.json();
+
+        const traces = [];
+        data.rankings.forEach((r, idx) => {
+          traces.push({
+            y: r.values,
+            name: r.germplasm.replace('SheathBlight_Tainan_', 'SB_'),
+            type: 'box',
+            boxpoints: 'all',
+            jitter: 0.3,
+            pointpos: -1.8,
+            marker: { size: 6, color: '#10b981' }
+          });
+        });
+
+        const layout = {
+          ...darkPlotlyLayout,
+          title: { text: `Top ${topN} Germplasms by ${data.metricName} (Boxplot Replicate Variance)`, font: { color: '#e2e8f0', size: 13 } },
+          showlegend: false,
+          xaxis: { tickangle: -45, tickfont: { color: '#cbd5e1', size: 10 } },
+          yaxis: { title: { text: data.metricName, font: { color: '#94a3b8' } }, gridcolor: '#1e293b' }
+        };
+
+        Plotly.newPlot('ranking-plot-container', traces, layout, { responsive: true, displaylogo: false });
+      } catch (err) {
+        console.error("Ranking load error:", err);
+      }
+    }
+
+    // ==================== 6. PLOT INSPECTOR & IMAGES ====================
+    async function loadPlotInspector(plotId) {
+      if (!plotId) return;
+      AppState.selectedPlotId = plotId;
+
+      try {
+        const res = await fetch(`/plot/plots/${plotId}`);
+        if (!res.ok) throw new Error("Plot not found");
+        const data = await res.json();
+        AppState.currentPlotData = data;
+
+        // Populate plot selector
+        const select = document.getElementById('inspector-plot-select');
+        if (select && select.value !== String(plotId)) select.value = String(plotId);
+
+        // Header info
+        const meta = data.metadata;
+        document.getElementById('plot-id-display').innerText = `Plot #${meta.plotNumber}`;
+        document.getElementById('plot-germplasm-badge').innerText = meta.germplasmName;
+        document.getElementById('plot-rep-badge').innerText = `Replicate ${meta.replicate}`;
+        document.getElementById('plot-coords-display').innerText = `Row ${meta.rowNumber}, Column ${meta.colNumber} | Unit: ${meta.observationUnitName} | Entry: ${meta.entryType}`;
+
+        // Indices chips
+        const chipsContainer = document.getElementById('plot-indices-chips');
+        chipsContainer.innerHTML = '';
+        const keyIndices = ['NDVI', 'NDRE', 'CCC', 'TGI', 'VARI'];
+        for (const idxName of keyIndices) {
+          if (data.indices[idxName] !== undefined) {
+            const chip = document.createElement('div');
+            chip.className = "px-2.5 py-1 rounded bg-slate-800/90 border border-slate-700/80 text-xs font-mono flex items-center gap-1.5";
+            chip.innerHTML = `<span class="text-slate-400 font-sans">${idxName}:</span> <strong class="text-emerald-400">${data.indices[idxName]}</strong>`;
+            chipsContainer.appendChild(chip);
+          }
+        }
+
+        // Render Spectral Signature
+        renderSpectralSignature(data.spectralSignature);
+
+        // Populate Compare dropdowns
+        populateCompareDropdowns(data.images);
+
+        // Render 18 Image Cards
+        renderImageGallery(data.images);
+      } catch (err) {
+        console.error("Plot inspector error:", err);
+      }
+    }
+
+    function renderSpectralSignature(signatureData) {
+      if (!signatureData || signatureData.length === 0) return;
+
+      const wavelengths = signatureData.map(s => s.wavelength);
+      const plotVals = signatureData.map(s => s.value);
+      const fieldAvg = signatureData.map(s => s.fieldAverage);
+      const bands = signatureData.map(s => s.band);
+
+      const traces = [
+        {
+          x: wavelengths,
+          y: plotVals,
+          mode: 'lines+markers',
+          type: 'scatter',
+          name: `Plot #${AppState.selectedPlotId}`,
+          line: { color: '#10b981', width: 3 },
+          marker: { size: 9, color: '#10b981' }
+        },
+        {
+          x: wavelengths,
+          y: fieldAvg,
+          mode: 'lines+markers',
+          type: 'scatter',
+          name: 'Field Average',
+          line: { color: '#64748b', width: 2, dash: 'dot' },
+          marker: { size: 6, color: '#64748b' }
+        }
+      ];
+
+      const layout = {
+        ...darkPlotlyLayout,
+        title: false,
+        margin: { l: 45, r: 20, t: 20, b: 40 },
+        xaxis: {
+          title: { text: 'Wavelength (nm)', font: { size: 10, color: '#94a3b8' } },
+          tickvals: wavelengths,
+          ticktext: bands.map((b, i) => `${b}<br>${wavelengths[i]}nm`),
+          gridcolor: '#1e293b'
+        },
+        yaxis: {
+          title: { text: 'Reflectance', font: { size: 10, color: '#94a3b8' } },
+          gridcolor: '#1e293b'
+        },
+        legend: { orientation: 'h', y: 1.15, font: { color: '#cbd5e1', size: 10 } }
+      };
+
+      Plotly.newPlot('spectral-plot-container', traces, layout, { responsive: true, displaylogo: false });
+    }
+
+    function renderImageGallery(images) {
+      const container = document.getElementById('images-grid-container');
+      container.innerHTML = '';
+
+      const filtered = AppState.currentImageCategory === 'all' 
+        ? images 
+        : images.filter(img => img.category === AppState.currentImageCategory);
+
+      document.getElementById('gallery-count-badge').innerText = `${filtered.length} of ${images.length} channels`;
+
+      filtered.forEach((img, idx) => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-950 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-700 transition flex flex-col justify-between group shadow-sm";
+
+        card.innerHTML = `
+          <div class="p-2.5 bg-slate-900/70 border-b border-slate-800 flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-slate-200 truncate pr-1" title="${img.label}">${img.label}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">${img.category}</span>
+          </div>
+
+          <div class="h-44 bg-slate-900/40 relative flex items-center justify-center p-2 cursor-pointer overflow-hidden" onclick="openZoomModal('${img.label}', '${img.url}', '${img.category}')">
+            <img src="${img.url}" alt="${img.label}" class="max-h-full max-w-full object-contain rounded transition group-hover:scale-105 duration-200" onerror="handleImageError(this)">
+            
+            <div class="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+              <span class="p-2 rounded-full bg-emerald-600 text-white shadow-lg"><i data-lucide="zoom-in" class="w-4 h-4"></i></span>
+            </div>
+          </div>
+
+          <div class="p-2 bg-slate-900/90 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <a href="${img.url}" target="_blank" class="hover:text-emerald-400 transition flex items-center gap-1 font-mono text-[10px] truncate max-w-[170px]" title="${img.url}">
+              <i data-lucide="link" class="w-3 h-3 flex-shrink-0"></i> Direct URL
+            </a>
+            <button onclick="openZoomModal('${img.label}', '${img.url}', '${img.category}')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px]">
+              Inspect
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function filterImageGallery(cat) {
+      AppState.currentImageCategory = cat;
+      document.querySelectorAll('.img-cat-btn').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = "img-cat-btn px-2.5 py-1 rounded text-white bg-emerald-600 font-medium";
+        } else {
+          btn.className = "img-cat-btn px-2.5 py-1 rounded text-slate-300 hover:text-white";
+        }
+      });
+      if (AppState.currentPlotData) renderImageGallery(AppState.currentPlotData.images);
+    }
+
+    function selectRandomPlot() {
+      const select = document.getElementById('inspector-plot-select');
+      if (select && select.options.length > 0) {
+        const randIdx = Math.floor(Math.random() * select.options.length);
+        const randVal = select.options[randIdx].value;
+        select.value = randVal;
+        loadPlotInspector(randVal);
+      }
+    }
+
+    // Comparison Mode
+    function toggleCompareMode() {
+      const el = document.getElementById('compare-view-container');
+      const btn = document.getElementById('btn-compare-mode');
+      const isHidden = el.classList.contains('hidden');
+
+      if (isHidden) {
+        el.classList.remove('hidden');
+        btn.classList.add('bg-emerald-600', 'text-white');
+        btn.classList.remove('bg-slate-800', 'text-slate-200');
+        updateCompareImages();
+      } else {
+        el.classList.add('hidden');
+        btn.classList.remove('bg-emerald-600', 'text-white');
+        btn.classList.add('bg-slate-800', 'text-slate-200');
+      }
+    }
+
+    function populateCompareDropdowns(images) {
+      const left = document.getElementById('compare-select-left');
+      const right = document.getElementById('compare-select-right');
+      if (!left || !right) return;
+
+      left.innerHTML = '';
+      right.innerHTML = '';
+
+      images.forEach((img, idx) => {
+        const optL = document.createElement('option');
+        optL.value = img.url;
+        optL.innerText = img.label;
+        if (img.key === 'rgb') optL.selected = true;
+        left.appendChild(optL);
+
+        const optR = document.createElement('option');
+        optR.value = img.url;
+        optR.innerText = img.label;
+        if (img.key === 'ndvi') optR.selected = true;
+        right.appendChild(optR);
+      });
+    }
+
+    function updateCompareImages() {
+      const leftSelect = document.getElementById('compare-select-left');
+      const rightSelect = document.getElementById('compare-select-right');
+
+      const imgLeft = document.getElementById('compare-img-left');
+      const imgRight = document.getElementById('compare-img-right');
+
+      if (leftSelect && imgLeft) {
+        imgLeft.src = leftSelect.value;
+        document.getElementById('compare-lbl-left').innerText = leftSelect.options[leftSelect.selectedIndex]?.text || '';
+      }
+      if (rightSelect && imgRight) {
+        imgRight.src = rightSelect.value;
+        document.getElementById('compare-lbl-right').innerText = rightSelect.options[rightSelect.selectedIndex]?.text || '';
+      }
+    }
+
+    // Friendly fallback for image error (e.g. if imagebreed domain DNS is offline or requires internal network)
+    function handleImageError(imgEl) {
+      imgEl.onerror = null;
+      // Generate clean SVG placeholder representing the band image
+      const alt = imgEl.alt || 'Plot Imagery';
+      const isNdvi = alt.includes('NDVI') || alt.includes('Vegetation');
+      const isRgb = alt.includes('RGB');
+      const color = isNdvi ? '#059669' : (isRgb ? '#3b82f6' : '#d97706');
+
+      const svgPlaceholder = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%231e293b"/><circle cx="150" cy="85" r="35" fill="${encodeURIComponent(color)}" opacity="0.3"/><path d="M130 95 L150 70 L170 95 Z" fill="${encodeURIComponent(color)}"/><text x="150" y="140" fill="%23cbd5e1" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle">${encodeURIComponent(alt)}</text><text x="150" y="160" fill="%2394a3b8" font-family="monospace" font-size="10" text-anchor="middle">[Remote Origin 530 - Link Saved]</text></svg>`;
+      imgEl.src = svgPlaceholder;
+    }
+
+    // Modal Handlers
+    function openZoomModal(title, url, category) {
+      const modal = document.getElementById('image-zoom-modal');
+      document.getElementById('modal-image-title').innerText = title;
+      document.getElementById('modal-image-subtitle').innerText = `Plot #${AppState.selectedPlotId} | Category: ${category}`;
+      document.getElementById('modal-image-src').src = url;
+      document.getElementById('modal-image-src').alt = title;
+      document.getElementById('modal-direct-link').href = url;
+      document.getElementById('modal-image-url-display').innerText = url;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeZoomModal() {
+      const modal = document.getElementById('image-zoom-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function copyModalUrl() {
+      const url = document.getElementById('modal-image-url-display').innerText;
+      if (url) {
+        navigator.clipboard.writeText(url);
+        alert('Image URL copied to clipboard!');
+      }
+    }
+
+    function openUploadModal() {
+      const modal = document.getElementById('upload-csv-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeUploadModal() {
+      const modal = document.getElementById('upload-csv-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function handleCsvUpload(event) {
+      event.preventDefault();
+      const fileInput = document.getElementById('csv-file-input');
+      const statusMsg = document.getElementById('upload-status-msg');
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        statusMsg.className = "text-xs font-mono text-rose-400 block";
+        statusMsg.innerText = "Please select a .csv file first.";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      statusMsg.className = "text-xs font-mono text-amber-400 block";
+      statusMsg.innerText = "Uploading and parsing dataset...";
+
+      try {
+        const res = await fetch('/plot/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const result = await res.json();
+
+        if (res.ok) {
+          statusMsg.className = "text-xs font-mono text-emerald-400 block";
+          statusMsg.innerText = result.message || "Upload successful!";
+          setTimeout(async () => {
+            closeUploadModal();
+            await fetchInitialData();
+            populateDropdowns();
+            loadFieldHeatmap();
+          }, 1000);
+        } else {
+          statusMsg.className = "text-xs font-mono text-rose-400 block";
+          statusMsg.innerText = result.detail || "Upload failed.";
+        }
+      } catch (err) {
+        statusMsg.className = "text-xs font-mono text-rose-400 block";
+        statusMsg.innerText = `Error: ${err.message}`;
+      }
+    }
+
+    // ==================== PLOT DOWNLOAD UTILITIES ====================
+    function downloadPlot(containerId, defaultFilename = 'plot.png') {
+      const container = document.getElementById(containerId);
+      if (!container || !container.data) {
+        alert("Plot not ready to download yet.");
+        return;
+      }
+
+      // Plotly high-resolution image export
+      Plotly.downloadImage(container, {
+        format: 'png',
+        width: 1400,
+        height: 900,
+        filename: defaultFilename.replace('.png', '')
+      }).catch(err => {
+        console.error("Plot download error:", err);
+      });
+    }
+
+    function downloadActivePlot() {
+      const tabToContainer = {
+        'heatmap': { id: 'heatmap-plot-container', name: 'field_spatial_heatmap' },
+        'histogram': { id: 'distribution-plot-container', name: 'distribution_histogram' },
+        'scatter': { id: 'scatter-plot-container', name: 'relative_scatter_plot' },
+        'correlation': { id: 'correlation-plot-container', name: 'correlation_matrix' },
+        'rankings': { id: 'ranking-plot-container', name: 'germplasm_rankings' },
+        'plot-inspector': { id: 'spectral-plot-container', name: `plot_${AppState.selectedPlotId}_spectral_signature` }
+      };
+
+      const target = tabToContainer[AppState.activeTab] || tabToContainer['heatmap'];
+      downloadPlot(target.id, `${target.name}.png`);
+    }
+
+    function downloadPlotReport() {
+      if (!AppState.currentPlotData) {
+        alert("No plot selected yet.");
+        return;
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(AppState.currentPlotData, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `plot_${AppState.selectedPlotId}_phenotype_data.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    }
+  </script>
+</body>
+</html>
