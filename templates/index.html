@@ -102,7 +102,7 @@
         </button>
 
         <!-- API Docs link -->
-        <a href="/docs" target="_blank" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition" title="FastAPI Interactive Swagger Docs">
+        <a id="docs-link" href="/docs" target="_blank" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition" title="FastAPI Interactive Swagger Docs">
           <i data-lucide="file-code" class="w-5 h-5"></i>
         </a>
       </div>
@@ -710,9 +710,15 @@
       }
     };
 
+    // Dynamic Base Path Detection (supports root '/' or subpaths like '/data_visulization')
+    const BASE_PATH = window.location.pathname.replace(/\/plot\/?$/, '').replace(/\/+$/, '');
+    const apiUrl = (endpoint) => `${BASE_PATH}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+
     // On page initialization
     document.addEventListener('DOMContentLoaded', async () => {
       lucide.createIcons();
+      const docsLink = document.getElementById('docs-link');
+      if (docsLink) docsLink.href = apiUrl('/docs');
       await fetchInitialData();
       populateDropdowns();
       await loadFieldHeatmap();
@@ -722,9 +728,9 @@
     async function fetchInitialData() {
       try {
         const [infoRes, traitsRes, imagesRes] = await Promise.all([
-          fetch('/plot/info'),
-          fetch('/plot/traits'),
-          fetch('/plot/images')
+          fetch(apiUrl('/plot/info')),
+          fetch(apiUrl('/plot/traits')),
+          fetch(apiUrl('/plot/images'))
         ]);
         const info = await infoRes.json();
         AppState.studyInfo = info.info || {};
@@ -784,7 +790,7 @@
       }
 
       // Populate plot selector with all plots
-      fetch('/plot/plots').then(res => res.json()).then(plots => {
+      fetch(apiUrl('/plot/plots')).then(res => res.json()).then(plots => {
         const plotSelect = document.getElementById('inspector-plot-select');
         if (plotSelect) {
           plotSelect.innerHTML = '';
@@ -853,7 +859,7 @@
       const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
       
       try {
-        const res = await fetch(`/plot/field-heatmap?metric=${encodeURIComponent(metric)}${repParam}`);
+        const res = await fetch(apiUrl(`/plot/field-heatmap?metric=${encodeURIComponent(metric)}${repParam}`));
         const data = await res.json();
         AppState.currentHeatmapData = data;
 
@@ -968,7 +974,7 @@
       const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
 
       try {
-        const res = await fetch(`/plot/distribution?metric=${encodeURIComponent(metric)}&bins=${bins}${repParam}`);
+        const res = await fetch(apiUrl(`/plot/distribution?metric=${encodeURIComponent(metric)}&bins=${bins}${repParam}`));
         const data = await res.json();
         AppState.currentDistributionData = data;
 
@@ -1055,7 +1061,7 @@
       const repParam = AppState.replicate ? `&replicate=${AppState.replicate}` : '';
 
       try {
-        const res = await fetch(`/plot/scatter?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&color_by=${colorBy}${repParam}`);
+        const res = await fetch(apiUrl(`/plot/scatter?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&color_by=${colorBy}${repParam}`));
         const data = await res.json();
 
         // Update regression stats
@@ -1143,7 +1149,7 @@
     // ==================== 4. CORRELATION MATRIX ====================
     async function loadCorrelationMatrix() {
       try {
-        const res = await fetch('/plot/correlation-matrix');
+        const res = await fetch(apiUrl('/plot/correlation-matrix'));
         const data = await res.json();
 
         const trace = {
@@ -1180,7 +1186,7 @@
       const isAsc = sortDir === 'asc';
 
       try {
-        const res = await fetch(`/plot/germplasm-ranking?metric=${encodeURIComponent(metric)}&top_n=${topN}&ascending=${isAsc}`);
+        const res = await fetch(apiUrl(`/plot/germplasm-ranking?metric=${encodeURIComponent(metric)}&top_n=${topN}&ascending=${isAsc}`));
         const data = await res.json();
 
         const traces = [];
@@ -1216,7 +1222,7 @@
       AppState.selectedPlotId = plotId;
 
       try {
-        const res = await fetch(`/plot/plots/${plotId}`);
+        const res = await fetch(apiUrl(`/plot/plots/${plotId}`));
         if (!res.ok) throw new Error("Plot not found");
         const data = await res.json();
         AppState.currentPlotData = data;
@@ -1501,7 +1507,7 @@
       statusMsg.innerText = "Uploading and parsing dataset...";
 
       try {
-        const res = await fetch('/plot/upload', {
+        const res = await fetch(apiUrl('/plot/upload'), {
           method: 'POST',
           body: formData
         });

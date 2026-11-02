@@ -15,10 +15,13 @@ from jinja2 import Environment, FileSystemLoader
 
 from data_manager import DataManager
 
+ROOT_PATH = os.getenv("ROOT_PATH", "")
+
 app = FastAPI(
     title="AgriPlot Vision - Multispectral & Phenotyping Visualizer",
     description="Interactive web backend and visualization platform for reflectance, vegetation indices, and plot imagery.",
-    version="1.0.0"
+    version="1.0.0",
+    root_path=ROOT_PATH
 )
 
 app.add_middleware(

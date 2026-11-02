@@ -65,17 +65,17 @@ docker build -t agriplot-vision .
 docker run -d -p 8000:8000 --name agriplot-app agriplot-vision
 ```
 
-### Option B: Using Docker Compose
+### Option B: Using Docker Compose (with Nginx Reverse Proxy)
 ```bash
 docker compose up -d --build
 ```
 
-Access the dashboard at [http://localhost:8000](http://localhost:8000) or [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Access the dashboard through Nginx at:
+- **Dashboard**: [http://localhost/data_visulization/](http://localhost/data_visulization/)
+- **Interactive API Docs (Swagger)**: [http://localhost/data_visulization/docs](http://localhost/data_visulization/docs)
 
-To stop the container:
+To stop the containers:
 ```bash
-docker stop agriplot-app && docker rm agriplot-app
-# Or if using docker compose:
 docker compose down
 ```
 
