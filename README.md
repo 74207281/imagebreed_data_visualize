@@ -71,8 +71,8 @@ docker compose up -d --build
 ```
 
 Access the dashboard through Nginx at:
-- **Dashboard**: [http://localhost/data_visulization/](http://localhost/data_visulization/)
-- **Interactive API Docs (Swagger)**: [http://localhost/data_visulization/docs](http://localhost/data_visulization/docs)
+- **Dashboard**: [http://localhost:70/data_visualize/](http://localhost:70/data_visualize/) or [http://localhost/data_visualize/](http://localhost/data_visualize/)
+- **Interactive API Docs (Swagger)**: [http://localhost:70/data_visualize/docs](http://localhost:70/data_visualize/docs)
 
 To stop the containers:
 ```bash
